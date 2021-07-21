@@ -11,15 +11,33 @@
 #include <iostream>
 #include "shader.h"
 
+#define KEYS 88 // I like pianos
+
 struct Note
 {
-    double freq; // Pitch
+    //double freq; // Pitch
+    int note_n;
     int duration;
+
+    static inline double get_n_freq(int n)
+    {
+        return pow(2, (float)(n - 49)/12.0) * 440.0;
+    }
+
+    inline double get_freq()
+    {
+        return get_n_freq(note_n);
+    }
 };
 
 double freq_mut()
 {
     return static_cast<double>(-200 + rand() % 401) * 0.2;
+}
+
+int note_mut()
+{
+    return -2 + rand() % 3;
 }
 
 int dur_mut()
@@ -33,6 +51,12 @@ public:
     Song()
     {
         _triangle_count = 0;
+        is_gl_ok = false;
+    }
+
+    ~Song()
+    {
+        //std::cout << "Song destructor\n";
     }
 
     static Song randInit(int n)
@@ -41,10 +65,10 @@ public:
         
         for (int i = 0 ; i < n ; i++)
         {
-            gen.notes.push_back({static_cast<double>(rand() % 1780), 100 + rand() % 800});
+            gen.notes.push_back({(rand() % KEYS), 100 + rand() % 800});
         }
         
-        gen.initGL();
+        //gen.initGL();
 
         return gen;
     }
@@ -55,40 +79,59 @@ public:
         
         for (int i = 0 ; i < a.notes.size() ; i++)
         {
-            gen.notes.push_back({freq_mut() + (a.notes[i].freq + b.notes[i].freq)/2.0, 
-        			 dur_mut() + (a.notes[i].duration + b.notes[i].duration)/2});
+            gen.notes.push_back({note_mut() + (a.notes[i].note_n + b.notes[i].note_n)/2, 
+        			             dur_mut() + (a.notes[i].duration + b.notes[i].duration)/2});
         }
         
-        gen.initGL();
+        //gen.initGL();
 
         return gen;
     }
 
     std::vector<Note> notes;
     int score;
+    int played_note = -1;
 
     void play()
     {
+        played_note = 0;
         Beeper b;
-	    for (const Note &a : notes)
+	    for (Note &a : notes)
 	    {
-            b.beep(a.freq, a.duration);
+            std::cout << "Played note is: " << played_note << "\n";
+            b.beep(a.get_freq(), a.duration);
+            b.wait();
+            played_note++;
 	    }
-        b.wait();
+        played_note = -1;
     }
 
-    void render()
+    void render(shader_t *shader)
     {
         glBindVertexArray(_vao);
 
-        //IMPORTANT: the third parameter is the number of vertices!
-        glDrawArrays(GL_TRIANGLES, 0, _triangle_count * 3);
+        if (played_note == -1)
+        {
+            glDrawArrays(GL_TRIANGLES, 0, _triangle_count * 3);
+            return;            
+        }
+
+        // Splitting in 3 draw calls to color the notes
+        glDrawArrays(GL_TRIANGLES, 0, played_note * 2 * 3); // White before
+        set_uniform_float3(shader, 1.0, 0.0, 0.5, "color");
+        glDrawArrays(GL_TRIANGLES, played_note * 2 * 3, 2 * 3); // Red current
+        set_uniform_float3(shader, 1.0, 1.0, 1.0, "color");
+        glDrawArrays(GL_TRIANGLES, (played_note + 1) * 2 * 3, (notes.size() - played_note - 1) * 2 * 3); // White after
     }
 
-private:
-    unsigned int _vao, _vbo;
-    size_t _triangle_count;
-    std::vector<float> vertices;
+    void cleanGraphics()
+    {
+        if (is_gl_ok)
+        {
+            glDeleteBuffers(1, &_vao);
+            glDeleteVertexArrays(1, &_vao);
+        }
+    }
 
     #define NOTE_HEIGHT_GUI 0.02f
 
@@ -114,9 +157,17 @@ private:
                                                         // Stride is = 2
         glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
         glEnableVertexAttribArray(0);
-        // glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3*sizeof(float)));
-        // glEnableVertexAttribArray(1);
+
+        is_gl_ok = true;
     }
+
+private:
+    unsigned int _vao, _vbo;
+    bool is_gl_ok;
+    size_t _triangle_count;
+    std::vector<float> vertices;
+
+    float step_note = 2.0 / (float)KEYS;
 
     void get_ui_vertices_song()
     {
@@ -128,7 +179,7 @@ private:
         {
             const float time_offset = (float) a_note.duration / 10000.0f;
 
-            dy = a_note.freq / 1000.0; //440.0;
+            dy = -1.0 + a_note.note_n * step_note;
          
             // Upper triangle
             // First vertex
@@ -178,7 +229,7 @@ private:
 
             _triangle_count += 1;
 
-            last_x += time_offset;
+            last_x += time_offset + 0.005;
         }
     }
 
@@ -189,9 +240,12 @@ class Population
 public:
     Population(int n)
     {
+        songs.clear();
+
     	for (int i = 0 ; i < n ; i++)
     	{
     	    songs.push_back(Song::randInit(10));
+            songs[i].initGL();
     	}
     }
 
@@ -212,18 +266,20 @@ public:
     int iter_n;
     int best_score = 0, best_idx = 0;
     int last_played = -1;
+    shader_t *_shader;
 
     void evaluate() // This is our most complicated function.
     {
+        std::cout << "Evaluating\n";
     	int cnt = 0;
     	for (Song &a : songs)
     	{
             last_played = cnt;
-    	    //a.play();
+    	    a.play();
 
     	    int score = cnt;
     	    // printf("Grade for song nº %d\n", cnt);
-    	    scanf("%d", &score);
+    	    // scanf("%d", &score);
 
     	    if (score > best_score)
     	    {
@@ -233,12 +289,16 @@ public:
 	        a.score = score;
 	        cnt++;
     	}
+        last_played = -1;
     }
 
     void draw_last_played()
     {
         if (last_played >= 0)
-            songs[last_played].render();
+        {
+            std::cout << "last_played: " << last_played << "\n";
+            songs[last_played].render(_shader);
+        }
     }
 
     float fitness(Song &a)
@@ -247,11 +307,15 @@ public:
 
     void elitism()
     {
-	   for (int i = 0 ; i < songs.size() ; i++)
-	   {
-	       if (i == best_idx) continue;
-	       songs[i] = Song::genFromParents(songs[best_idx], songs[i]);
-	   }
+        std::cout << "Elitism happening!\n";
+
+        for (int i = 0 ; i < songs.size() ; i++)
+        {
+            if (i == best_idx) continue;
+            songs[i].cleanGraphics();
+            songs[i] = Song::genFromParents(songs[best_idx], songs[i]);
+            songs[i].initGL();
+        }
     }
 };
 

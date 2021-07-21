@@ -27,6 +27,8 @@ bool viewport_changed;
 
 ImVec4 clear_color = ImVec4(0.5f, 0.5f, 0.5f, 1.00f);
 
+bool run_ga = true;
+
 struct ProgState
 {
 };
@@ -73,11 +75,15 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
     //cameraPos += (float)yoffset * 20.0f * cameraFront;
 }
 
-
 void processInput(GLFWwindow *window)
 {
     if(glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
+    if(glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
+    {
+        run_ga = !run_ga;
+        std::cout << "Run ga: " << run_ga << "\n";
+    }
 }
 
 GLFWwindow* initGL()
@@ -137,10 +143,15 @@ GLFWwindow* initGL()
 
 void run_GA(Population *ref)
 {
-    std::cout << "Ga thread started\n";
+    int ga_iter_n = 0;
 
-    ref->evaluate();
-    ref->elitism();
+    while (run_ga)
+    {
+        std::cout << "GA iter: " << ga_iter_n << "\n";
+        ref->evaluate();
+        ref->elitism();
+        ga_iter_n++;
+    }
 }
 
 int main(int argc, char* argv[])
@@ -149,13 +160,15 @@ int main(int argc, char* argv[])
     GLFWwindow* window = initGL();
 
     Population a_pop(5);
-    //a_pop.playPopulation();
-    printf("kappa\n");
+    
+    printf("Init\n");
     std::thread ga_thread (run_GA, &a_pop);
 
     // Shader to be used
     shader_err err;
     shader_t* display_shader = load_shader("shaders/vertex.glsl", "shaders/fragment.glsl", &err);
+
+    a_pop._shader = display_shader;
 
     while(!glfwWindowShouldClose(window))
     {
@@ -165,12 +178,16 @@ int main(int argc, char* argv[])
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
 
         use_shader(display_shader);
+        set_uniform_float3(display_shader, 1.0, 1.0, 1.0, "color"); // Just to init
+
         a_pop.draw_last_played();
     
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
+
     ga_thread.join();
+    unload_shader(display_shader);
 
     return 0;
 }
