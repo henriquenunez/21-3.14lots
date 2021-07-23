@@ -21,8 +21,8 @@
 //#define STB_IMAGE_IMPLEMENTATION
 //#include "stb_image.h"
 
-int SCREEN_HEIGHT = 400;
-int SCREEN_WIDTH = 600;
+int SCREEN_HEIGHT = 640;
+int SCREEN_WIDTH = 800;
 bool viewport_changed;
 
 ImVec4 clear_color = ImVec4(0.5f, 0.5f, 0.5f, 1.00f);
@@ -40,7 +40,7 @@ void runUI()
         {
             static int counter = 0;
 
-            ImGui::Begin("HeatMAP3D Menu");
+            ImGui::Begin("Menu");
             //ImGui::Text("This is some useful text.");
             ImGui::Checkbox("Demo Window", &show_demo_window);
             //ImGui::Checkbox("Another window", &show_another_window);
@@ -96,7 +96,7 @@ GLFWwindow* initGL()
     //glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 
     //WINDOW CREATION
-    GLFWwindow* window = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "HeatMAP3D", NULL, NULL);
+    GLFWwindow* window = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "21-3.14lots", NULL, NULL);
 
     if (window == NULL)
     {

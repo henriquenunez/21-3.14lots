@@ -68,18 +68,33 @@ public:
     //    notes = s.notes;
     //}
 
+    /* 
     Song(int n)
     {
         _triangle_count = 0;
         is_gl_ok = false;
-	_vao = _vbo = 0;
 
         for (int i = 0 ; i < n ; i++)
         {
             notes.push_back({(rand() % KEYS), 100 + rand() % 800});
         }
     }
-    /* 
+
+    Song (Song &a, Song &b)
+    {
+        _triangle_count = 0;
+        is_gl_ok = false;
+
+        for (int i = 0 ; i < a.notes.size() ; i++)
+        {
+            notes.push_back({note_mut() + (a.notes[i].note_n + b.notes[i].note_n)/2, 
+        			             dur_mut() + (a.notes[i].duration + b.notes[i].duration)/2});
+        }
+        
+    }
+    */
+
+
     static Song randInit(int n)
     {
         Song gen;
@@ -108,21 +123,7 @@ public:
 
         return gen;
     }
-    */
- 
-    Song (Song &a, Song &b)
-    {
-        _triangle_count = 0;
-        is_gl_ok = false;
-
-        for (int i = 0 ; i < a.notes.size() ; i++)
-        {
-            notes.push_back({note_mut() + (a.notes[i].note_n + b.notes[i].note_n)/2, 
-        			             dur_mut() + (a.notes[i].duration + b.notes[i].duration)/2});
-        }
-        
-    }
-
+    
     std::vector<Note> notes;
     int score;
     int played_note = -1;
@@ -133,10 +134,10 @@ public:
         Beeper b;
 	    for (Note &a : notes)
 	    {
-            std::cout << "Played note is: " << played_note << "\n";
-            b.beep(a.get_freq(), a.duration);
-            b.wait();
-            played_note++;
+		std::cout << "Played note is: " << played_note << "\n";
+            	b.beep(a.get_freq(), a.duration/2); // Speeding up a bit 
+            	b.wait();
+            	played_note++;
 	    }
         played_note = -1;
     }
@@ -148,7 +149,6 @@ public:
         if (played_note == -1)
         {
             glDrawArrays(GL_TRIANGLES, 0, _triangle_count * 3);
-	    glBindVertexArray(0);
             return;            
         }
 
@@ -203,9 +203,9 @@ public:
 	is_gl_ok = true;
     }
 
+    bool is_gl_ok;
 private:
     unsigned int _vao, _vbo;
-    bool is_gl_ok;
     size_t _triangle_count;
     std::vector<float> vertices;
 
@@ -283,36 +283,28 @@ class Population
 public:
     Population(int n)
     {
-        //songs.clear();
-	pop_size = n;
-	songs = new Song*[n];
+        songs.clear();
 
     	for (int i = 0 ; i < n ; i++)
     	{
-    	    //songs.push_back(new Song(10));
-    	    songs[i] = new Song(10);
-            songs[i]->initGL();
+    	    songs.push_back(Song::randInit(10));
     	}
     }
 
     void playPopulation()
     {
     	int cnt = 1;
-    	//for (auto &a : songs)
-	for (int i = 0; i < pop_size; i++)
+    	for (auto &a : songs)
     	{
-	    Song* a = songs[i];
     	    #ifdef DEBUG
     	    printf("Playing song nº %d\n", cnt++);
     	    #endif
 
-    	    a->play();
+    	    a.play();
     	}
     }
 
-    //std::vector<Song*> songs;
-    int pop_size;
-    Song **songs;
+    std::vector<Song> songs;
     int iter_n;
     int best_score = 0, best_idx = 0;
     int last_played = -1;
@@ -323,13 +315,11 @@ public:
     {
         std::cout << "Evaluating\n";
     	int cnt = 0;
-    	//for (auto &a : songs)
-	for (int i = 0; i < pop_size; i++)
+    	for (auto &a : songs)
     	{
-	    Song* a = songs[i];
 	    std::cout << "Playing song " << cnt << "\n";
             last_played = cnt;
-    	    a->play();
+    	    a.play();
 
     	    int score = cnt;
     	    // printf("Grade for song nº %d\n", cnt);
@@ -340,7 +330,7 @@ public:
         		best_score = score;
         		best_idx = cnt;
     	    }
-	        a->score = score;
+	        a.score = score;
 	        cnt++;
     	}
         last_played = -1;
@@ -351,8 +341,9 @@ public:
         if (last_played >= 0)
         {
 //            std::cout << "last_played: " << last_played << "\n";
-	    render_mutex.lock();
-	    songs[last_played]->render(_shader);
+	    render_mutex.lock(); 
+            if (!songs[last_played].is_gl_ok) songs[last_played].initGL();
+	    songs[last_played].render(_shader);
 	    render_mutex.unlock();
         }
     }
@@ -365,15 +356,11 @@ public:
     {
         std::cout << "Elitism happening!\n";
 
-        for (int i = 0 ; i < pop_size ; i++)
+        for (int i = 0 ; i < songs.size() ; i++)
         {
             if (i == best_idx) continue;
 	    render_mutex.lock();
-	    Song* temp = songs[i];
-	    delete temp;
-	    temp = new Song(10);//(songs[best_idx], songs[i]);
-            temp->initGL();
-            songs[i] = temp;
+            songs[i] = Song::randInit(10);//(songs[best_idx], songs[i]);
 	    render_mutex.unlock();
         }
     }
