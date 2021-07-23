@@ -8,7 +8,7 @@ evaluated to achieve the best result possible. There are many techniques to
 spread the good individual's genes. Currently this project implements the
 'elisism' technique.
 
-## Screenshots (actually, you should (listen)[] to it)
+## Screenshots (actually, you should listen to it)
 
 ![](assets/2021-07-23_07-32.png)
 
