@@ -160,7 +160,7 @@ int main(int argc, char* argv[])
     GLFWwindow* window = initGL();
 
     Population a_pop(5);
-    
+
     printf("Init\n");
     std::thread ga_thread (run_GA, &a_pop);
 
@@ -181,11 +181,12 @@ int main(int argc, char* argv[])
         set_uniform_float3(display_shader, 1.0, 1.0, 1.0, "color"); // Just to init
 
         a_pop.draw_last_played();
-    
+
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
 
+    run_ga = false;
     ga_thread.join();
     unload_shader(display_shader);
 
