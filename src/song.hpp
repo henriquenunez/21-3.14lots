@@ -1,13 +1,21 @@
+#ifndef SONG_H
+#define SONG_H
+
 #include "beep.hpp"
+#include <SDL/SDL_timer.h>
 #include <vector>
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
+#include <SDL/SDL.h>
+#include <SDL/SDL_audio.h>
+
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
+#include <cstdio>
 #include <memory>
 #include <iostream>
 #include <mutex>
@@ -18,12 +26,18 @@
 struct Note
 {
     //double freq; // Pitch
-    int note_n;
+    int note_n; // If 0 it's a pause.
     int duration;
 
     static inline double get_n_freq(int n)
     {
         return pow(2, (float)(n - 49)/12.0) * 440.0;
+    }
+
+    bool is_pause()
+    {
+	if (note_n == 0) return true;
+	return false;
     }
 
     inline double get_freq()
@@ -62,6 +76,40 @@ public:
 	cleanGraphics();
     }
 
+    static Song read_song(const char* filename)
+    {
+	Song gen;
+        
+        //for (int i = 0 ; i < n ; i++)
+        //{
+        //    gen.notes.push_back({(rand() % KEYS), 100 + rand() % 800});
+        //}
+        
+        FILE* song_f = fopen(filename, "r");
+        char * line = NULL;
+        size_t len = 0;
+        ssize_t read;
+	int temp_note, temp_duration;
+
+        if (song_f == NULL)
+            exit(EXIT_FAILURE);
+    
+        while ((read = getline(&line, &len, song_f)) != -1)
+        {
+    	// Checking if line is comment
+            if (line[0] == '#') continue;
+	    sscanf(line, "%d %d", &temp_note, &temp_duration); 
+            printf("Retrieved line of length %zu:\n", read);
+            printf("%s", line);
+	    gen.notes.push_back({temp_note, temp_duration * 100});
+        }
+    
+        fclose(song_f);
+        if (line)
+            free(line);
+        return gen;
+        //exit(EXIT_SUCCESS);
+    }
     //void operator = (const Song &s)
     //{
     //    cleanGraphics();
@@ -135,7 +183,8 @@ public:
 	    for (Note &a : notes)
 	    {
 		std::cout << "Played note is: " << played_note << "\n";
-            	b.beep(a.get_freq(), a.duration/2); // Speeding up a bit 
+		if (a.is_pause()) SDL_Delay(a.duration/2);
+		else b.beep(a.get_freq(), a.duration/2); // Speeding up a bit 
             	b.wait();
             	played_note++;
 	    }
@@ -365,4 +414,6 @@ public:
         }
     }
 };
+
+#endif
 

@@ -154,6 +154,14 @@ void run_GA(Population *ref)
     }
 }
 
+void playsong(Song *ref)
+{
+    while (run_ga)
+    {
+       ref->play();	
+    }
+}
+
 int main(int argc, char* argv[])
 {
     SDL_Init(SDL_INIT_AUDIO);
@@ -162,13 +170,17 @@ int main(int argc, char* argv[])
     Population a_pop(5);
 
     printf("Init\n");
-    std::thread ga_thread (run_GA, &a_pop);
+    //std::thread ga_thread (run_GA, &a_pop);
 
     // Shader to be used
     shader_err err;
     shader_t* display_shader = load_shader("shaders/vertex.glsl", "shaders/fragment.glsl", &err);
 
     a_pop._shader = display_shader;
+
+    Song mysong = Song::read_song("samples/twinkle_twinkle.top");
+    std::thread audio_thread(playsong, &mysong);
+    mysong.initGL();
 
     while(!glfwWindowShouldClose(window))
     {
@@ -180,14 +192,16 @@ int main(int argc, char* argv[])
         use_shader(display_shader);
         set_uniform_float3(display_shader, 1.0, 1.0, 1.0, "color"); // Just to init
 
-        a_pop.draw_last_played();
+	mysong.render(display_shader);
+        //a_pop.draw_last_played();
 
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
 
     run_ga = false;
-    ga_thread.join();
+    //ga_thread.join();
+    audio_thread.join();
     unload_shader(display_shader);
 
     return 0;
