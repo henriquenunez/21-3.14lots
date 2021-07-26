@@ -160,18 +160,18 @@ public:
     static Song genFromParents(Song &a, Song &b)
     {
         Song gen;
-        
+
         for (int i = 0 ; i < a.notes.size() ; i++)
         {
-            gen.notes.push_back({note_mut() + (a.notes[i].note_n + b.notes[i].note_n)/2, 
+            gen.notes.push_back({note_mut() + (a.notes[i].note_n + b.notes[i].note_n)/2,
         			             dur_mut() + (a.notes[i].duration + b.notes[i].duration)/2});
         }
-        
+
         //gen.initGL();
 
         return gen;
     }
-    
+
     std::vector<Note> notes;
     int score;
     int played_note = -1;
@@ -184,7 +184,7 @@ public:
 	    {
 		std::cout << "Played note is: " << played_note << "\n";
 		if (a.is_pause()) SDL_Delay(a.duration);
-		else b.beep(a.get_freq(), a.duration); // Speeding up a bit 
+		else b.beep(a.get_freq(), a.duration); // Speeding up a bit
             	b.wait();
             	played_note++;
 	    }
@@ -198,7 +198,7 @@ public:
         if (played_note == -1)
         {
             glDrawArrays(GL_TRIANGLES, 0, _triangle_count * 3);
-            return;            
+            return;
         }
 
         // Splitting in 3 draw calls to color the notes
@@ -248,7 +248,7 @@ public:
         glEnableVertexAttribArray(0);
 
 	glBindVertexArray(0);
-        
+
 	is_gl_ok = true;
     }
 
@@ -265,14 +265,14 @@ private:
         // Creating vertices
         vertices.resize(0);
 	_triangle_count = 0;
-        float last_x = 0.0, t_x, t_y, dy;
+        float last_x = -1.0, t_x, t_y, dy;
 
         for (Note &a_note : notes)
         {
-            const float time_offset = (float) a_note.duration / 10000.0f;
+            const float time_offset = (float) a_note.duration / 15000.0f;
 
             dy = -1.0 + a_note.note_n * step_note;
-         
+
             // Upper triangle
             // First vertex
             t_x = last_x;
@@ -321,7 +321,7 @@ private:
 
             _triangle_count += 1;
 
-            last_x += time_offset + 0.005;
+            last_x += time_offset;// + 0.005;
         }
     }
 
@@ -397,8 +397,11 @@ public:
         }
     }
 
+    // Basically go through the song and evaluate with our metrics.
     float fitness(Song &a)
     {
+	// "Só"
+	return 0.1;
     }
 
     void elitism()

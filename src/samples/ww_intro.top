@@ -2,7 +2,24 @@
 # Format: <KEY> <DURATION>
 # KEY: ranges from 1 to 88, 0 is pause.
 # DURATION: beats
-# first
+49 3
+52 3
+54 3
+56 3
+56 6
+49 1
+61 1
+56 1
+52 1
+49 1
+44 1
+#
+49 3
+56 3
+54 3
+52 3
+52 8
+# "Chorus"
 56 2
 57 1
 56 2
@@ -11,7 +28,7 @@
 54 1
 52 4
 54 8
-# second
+# 
 54 2
 56 1
 54 2
