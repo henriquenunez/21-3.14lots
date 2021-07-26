@@ -101,7 +101,7 @@ public:
 	    sscanf(line, "%d %d", &temp_note, &temp_duration); 
             printf("Retrieved line of length %zu:\n", read);
             printf("%s", line);
-	    gen.notes.push_back({temp_note, temp_duration * 100});
+	    gen.notes.push_back({temp_note, temp_duration * 250});
         }
     
         fclose(song_f);
@@ -183,8 +183,8 @@ public:
 	    for (Note &a : notes)
 	    {
 		std::cout << "Played note is: " << played_note << "\n";
-		if (a.is_pause()) SDL_Delay(a.duration/2);
-		else b.beep(a.get_freq(), a.duration/2); // Speeding up a bit 
+		if (a.is_pause()) SDL_Delay(a.duration);
+		else b.beep(a.get_freq(), a.duration); // Speeding up a bit 
             	b.wait();
             	played_note++;
 	    }

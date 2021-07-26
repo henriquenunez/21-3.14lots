@@ -178,7 +178,7 @@ int main(int argc, char* argv[])
 
     a_pop._shader = display_shader;
 
-    Song mysong = Song::read_song("samples/twinkle_twinkle.top");
+    Song mysong = Song::read_song("samples/ww_intro.top");
     std::thread audio_thread(playsong, &mysong);
     mysong.initGL();
 

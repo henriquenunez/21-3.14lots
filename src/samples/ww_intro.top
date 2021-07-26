@@ -1,0 +1,22 @@
+# WestWorld theme song
+# Format: <KEY> <DURATION>
+# KEY: ranges from 1 to 88, 0 is pause.
+# DURATION: beats
+# first
+56 2
+57 1
+56 2
+57 1
+56 1
+54 1
+52 4
+54 8
+# second
+54 2
+56 1
+54 2
+56 1
+54 1
+52 1
+47 4
+49 8

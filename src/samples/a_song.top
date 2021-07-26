@@ -1,0 +1,24 @@
+# Twinkle twinkle little star
+# Format: <KEY> <DURATION>
+# KEY: ranges from 1 to 88, 0 is pause.
+# DURATION: beats
+40 1
+0 3
+40 1
+0 3
+45 1
+0 3
+45 1
+0 3
+43 1
+0 3
+43 1
+0 3
+43 1
+0 6
+43 1
+0 6
+41 1
+0 3
+41 1
+0 3
