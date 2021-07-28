@@ -1,5 +1,6 @@
 #include "song.hpp"
 
+#include <cstdlib>
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
@@ -141,11 +142,11 @@ GLFWwindow* initGL()
     return window;
 }
 
-void run_GA(Population *ref)
+void run_GA(Population *ref, int max_iter)
 {
     int ga_iter_n = 0;
 
-    while (run_ga)
+    while (ga_iter_n < max_iter)
     {
         std::cout << "GA iter: " << ga_iter_n << "\n";
         ref->evaluate();
@@ -154,12 +155,9 @@ void run_GA(Population *ref)
     }
 }
 
-void playsong(Song *ref)
+void playsong(Population *ref)
 {
-    while (run_ga)
-    {
-       ref->play();	
-    }
+    ref->playAll();
 }
 
 int main(int argc, char* argv[])
@@ -167,21 +165,32 @@ int main(int argc, char* argv[])
     SDL_Init(SDL_INIT_AUDIO);
     GLFWwindow* window = initGL();
 
-    Population a_pop(5);
+    int ga_iter_n;
+
+    if (argc < 2) ga_iter_n = 50;
+    else ga_iter_n = atoi(argv[1]);
 
     printf("Init\n");
-    //std::thread ga_thread (run_GA, &a_pop);
 
     // Shader to be used
     shader_err err;
     shader_t* display_shader = load_shader("shaders/vertex.glsl", "shaders/fragment.glsl", &err);
 
-    a_pop._shader = display_shader;
 
     Song mysong = Song::read_song("samples/ww_intro.top");
-    std::thread audio_thread(playsong, &mysong);
+    //std::thread audio_thread(playsong, &mysong);
     mysong.initGL();
 
+    Population a_pop(20, mysong);
+    a_pop._shader = display_shader;
+
+    //std::thread ga_thread (run_GA, &a_pop);
+    //
+    //
+    run_GA(&a_pop, 15000);
+
+    std::thread playthread (playsong, &a_pop);
+    // Play whole population once.
     while(!glfwWindowShouldClose(window))
     {
         processInput(window);
@@ -192,8 +201,7 @@ int main(int argc, char* argv[])
         use_shader(display_shader);
         set_uniform_float3(display_shader, 1.0, 1.0, 1.0, "color"); // Just to init
 
-	mysong.render(display_shader);
-        //a_pop.draw_last_played();
+	a_pop.draw_last_played();
 
         glfwSwapBuffers(window);
         glfwPollEvents();
@@ -201,7 +209,8 @@ int main(int argc, char* argv[])
 
     run_ga = false;
     //ga_thread.join();
-    audio_thread.join();
+    //audio_thread.join();
+    playthread.join();
     unload_shader(display_shader);
 
     return 0;

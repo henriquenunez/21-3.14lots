@@ -79,12 +79,12 @@ public:
     static Song read_song(const char* filename)
     {
 	Song gen;
-        
+
         //for (int i = 0 ; i < n ; i++)
         //{
         //    gen.notes.push_back({(rand() % KEYS), 100 + rand() % 800});
         //}
-        
+
         FILE* song_f = fopen(filename, "r");
         char * line = NULL;
         size_t len = 0;
@@ -93,30 +93,27 @@ public:
 
         if (song_f == NULL)
             exit(EXIT_FAILURE);
-    
+
         while ((read = getline(&line, &len, song_f)) != -1)
         {
     	// Checking if line is comment
             if (line[0] == '#') continue;
-	    sscanf(line, "%d %d", &temp_note, &temp_duration); 
+	    sscanf(line, "%d %d", &temp_note, &temp_duration);
             printf("Retrieved line of length %zu:\n", read);
             printf("%s", line);
 	    gen.notes.push_back({temp_note, temp_duration * 250});
         }
-    
+
         fclose(song_f);
         if (line)
             free(line);
+
+	gen.compute_song_metrics();
+
         return gen;
         //exit(EXIT_SUCCESS);
     }
-    //void operator = (const Song &s)
-    //{
-    //    cleanGraphics();
-    //    notes = s.notes;
-    //}
 
-    /* 
     Song(int n)
     {
         _triangle_count = 0;
@@ -126,6 +123,7 @@ public:
         {
             notes.push_back({(rand() % KEYS), 100 + rand() % 800});
         }
+	compute_song_metrics();
     }
 
     Song (Song &a, Song &b)
@@ -135,28 +133,27 @@ public:
 
         for (int i = 0 ; i < a.notes.size() ; i++)
         {
-            notes.push_back({note_mut() + (a.notes[i].note_n + b.notes[i].note_n)/2, 
+            notes.push_back({note_mut() + (a.notes[i].note_n + b.notes[i].note_n)/2,
         			             dur_mut() + (a.notes[i].duration + b.notes[i].duration)/2});
         }
-        
+	compute_song_metrics();
     }
-    */
 
 
     static Song randInit(int n)
     {
         Song gen;
-        
+
         for (int i = 0 ; i < n ; i++)
         {
             gen.notes.push_back({(rand() % KEYS), 100 + rand() % 800});
         }
-        
-        //gen.initGL();
 
+        //gen.initGL();
+	gen.compute_song_metrics();
         return gen;
     }
-        
+
     static Song genFromParents(Song &a, Song &b)
     {
         Song gen;
@@ -234,6 +231,7 @@ public:
         glBindVertexArray(_vao);
         glGenBuffers(1, &_vbo);
 
+	// TODO: Create a logger or something like that
         std::cout << "Generated " << vertices.size() << " vertices\n";
         std::cout << "vbo " << _vbo << " vao " << _vao << "\n";
 
@@ -251,6 +249,9 @@ public:
 
 	is_gl_ok = true;
     }
+
+    float interval_values_mean;
+    float interval_values_var;
 
     bool is_gl_ok;
 private:
@@ -325,12 +326,73 @@ private:
         }
     }
 
+    // Here, following the reference paper, we will establish values for each
+    // type of interval.
+    // perfect consonants unison, perfect fourth, 
+    // perfect fifth, octave 1 1 
+    // imperfect 
+    // consonants 
+    // minor and major thirds 
+    // and sixths 2 3 
+    // seconds minor and major seconds 3 1 
+    // sevenths minor and major sevenths 3 3 
+    // intervals greater 
+    // than octave 
+    // all intervals greater than 
+    // octave 5 5 
+    //
+    void compute_song_metrics()
+    {
+	// Intervals are between two notes.
+	const int interval_n = notes.size()-1;
+	int *intervals = new int[interval_n];
+
+	for (int i = 1 ; i < notes.size() ; i++)
+	{
+	    const int interval = notes[i].note_n - notes[i-1].note_n;
+	    int val;
+
+	    if (interval == 0 ||
+	        interval == 12 ||
+		interval == 5 ||
+		interval == 7) val = 1;
+	    else if (interval == 3 ||
+		     interval == 4 ||
+		     interval == 8 ||
+		     interval == 9) val = 2;
+	    else if (interval == 1 ||
+		     interval == 2 ||
+		     interval == 10 ||
+		     interval == 11) val = 3;
+	    else if (interval > 12) val = 5;
+
+	    intervals[i-1] = val;
+	}
+
+	float avg = 0.0;
+	float avg_square = 0.0;
+
+	// First and second distribution moments.
+	for (int i = 0 ; i < interval_n ; i++)
+	{
+	    avg += (float)intervals[i];
+	    avg_square += (float)intervals[i] + (float)intervals[i];
+	}
+
+	avg /= (float)interval_n;
+	avg_square /= (float)interval_n;
+
+	interval_values_mean = avg;
+	interval_values_var = avg_square - (avg * avg); // Variance def.
+
+	delete[] intervals;
+    }
 };
 
 class Population
 {
 public:
-    Population(int n)
+    Population(int n, Song &reference_song) : _reference_song(reference_song)
     {
         songs.clear();
 
@@ -340,25 +402,33 @@ public:
     	}
     }
 
-    void playPopulation()
+    void playAll()
     {
-    	int cnt = 1;
+	playing_ref = true;
+	_reference_song.play();
+	playing_ref = false;
+
+	int cnt = 0;
     	for (auto &a : songs)
     	{
     	    #ifdef DEBUG
-    	    printf("Playing song nº %d\n", cnt++);
+    	    printf("Playing song nº %d\n", cnt);
     	    #endif
 
+	    last_played = cnt++;
     	    a.play();
     	}
     }
 
     std::vector<Song> songs;
     int iter_n;
-    int best_score = 0, best_idx = 0;
+    float best_score = 0.0;
+    int best_idx = 0;
     int last_played = -1;
     shader_t *_shader;
     std::mutex render_mutex;
+    Song &_reference_song; // Like, literally.
+    bool playing_ref = false;
 
     void evaluate() // This is our most complicated function.
     {
@@ -366,42 +436,51 @@ public:
     	int cnt = 0;
     	for (auto &a : songs)
     	{
-	    std::cout << "Playing song " << cnt << "\n";
-            last_played = cnt;
-    	    a.play();
+	    //std::cout << "Playing song " << cnt << "\n";
+            //last_played = cnt;
+    	    //a.play();
 
-    	    int score = cnt;
+    	    const float score = fitness(a);
     	    // printf("Grade for song nº %d\n", cnt);
     	    // scanf("%d", &score);
 
     	    if (score > best_score)
     	    {
-        		best_score = score;
-        		best_idx = cnt;
+		best_score = score;
+        	best_idx = cnt;
     	    }
-	        a.score = score;
-	        cnt++;
+
+	    a.score = score;
+	    cnt++;
     	}
         last_played = -1;
     }
 
     void draw_last_played()
     {
-        if (last_played >= 0)
+	if (playing_ref)
+	{
+	    render_mutex.lock();
+	    _reference_song.render(_shader);
+	    render_mutex.unlock();
+	}
+        else if (last_played >= 0)
         {
-//            std::cout << "last_played: " << last_played << "\n";
-	    render_mutex.lock(); 
+	    // std::cout << "last_played: " << last_played << "\n";
+	    render_mutex.lock();
             if (!songs[last_played].is_gl_ok) songs[last_played].initGL();
 	    songs[last_played].render(_shader);
 	    render_mutex.unlock();
         }
     }
 
-    // Basically go through the song and evaluate with our metrics.
+    // Compare the intervals to our reference song.
     float fitness(Song &a)
     {
-	// "Só"
-	return 0.1;
+	float dist = fabs(a.interval_values_mean - _reference_song.interval_values_mean);
+	dist += fabs(a.interval_values_var - _reference_song.interval_values_var);
+
+	return (float)1.0/dist;
     }
 
     void elitism()
@@ -412,7 +491,7 @@ public:
         {
             if (i == best_idx) continue;
 	    render_mutex.lock();
-            songs[i] = Song::randInit(10);//(songs[best_idx], songs[i]);
+            songs[i] = Song(songs[best_idx], songs[i]);
 	    render_mutex.unlock();
         }
     }
