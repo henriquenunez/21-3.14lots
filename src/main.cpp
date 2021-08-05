@@ -75,6 +75,10 @@ struct TOP
     float *x_data = NULL;
     float *y_data = NULL;
 
+    bool selected_ref_song_file;
+    imgui_addons::ImGuiFileBrowser file_dialog;
+    std::string ref_song_filename;
+
     void runUI()
     {
         ImGui_ImplOpenGL3_NewFrame();
@@ -89,6 +93,8 @@ struct TOP
 
             ImGui::InputInt("Generation number", &generation_num);
             ImGui::InputInt("Mutation rate (notes)", &note_mut_span);
+            ImGui::InputInt("Mutation rate (duration)", &dur_mut_span);
+	    if (ImGui::Button("Open Song")) show_open_file_window = true;
 
 	    //ImGui::InputInt("Mutation rate (duration)", &note_mut_span);
             //ImGui::SameLine();
@@ -97,9 +103,16 @@ struct TOP
             //ImGui::Checkbox("Demo Window", &show_demo_window);
             //ImGui::Checkbox("Another window", &show_another_window);
             //if (ImGui::Button("Open File")) show_open_file_window = true;
-            if (ImGui::Button("Start Running GA")) start_running_ga = true;
-            if (ImGui::Button("Init Population")) init_population = true;
-            if (ImGui::Button("Play stuff")) play_stuff = true;
+            if (selected_ref_song_file)
+	    {
+		if (ImGui::Button("Start Running GA"))
+		{
+		    init_population = true;
+		    start_running_ga = true;
+		}
+		//if (ImGui::Button("Init Population")) init_population = true;
+		if (ImGui::Button("Play stuff")) play_stuff = true;
+	    }
 
             ImGui::End();
         }
@@ -123,6 +136,18 @@ struct TOP
 	    }
 	    ImGui::End();
         }
+
+        if (show_open_file_window)
+        {
+            ImGui::OpenPopup("Open File");
+        }
+
+    	if(file_dialog.showFileDialog("Open File", imgui_addons::ImGuiFileBrowser::DialogMode::OPEN, ImVec2(700, 310), ".top"))
+    	{
+	    ref_song_filename = std::string(file_dialog.selected_path);    // The absolute path to the selected file
+	    selected_ref_song_file = true;
+	    show_open_file_window = false;
+	}
 
         ImGui::Render();
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
@@ -148,7 +173,7 @@ struct TOP
             return NULL;
         }
         glfwMakeContextCurrent(window);
-    
+
         if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
         {
             std::cout << "Failed to initialize GLAD" << std::endl;
@@ -156,23 +181,23 @@ struct TOP
         }
         glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
         glViewport(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
-    
+
         glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
         glfwSetCursorPosCallback(window, mouse_callback);
         glfwSetScrollCallback(window, scroll_callback);
-    
+
         glfwSwapInterval(0); // 60fps or so i guess
-    
+
         const GLubyte* vendor = glGetString(GL_VENDOR); // Returns the vendor
         const GLubyte* renderer = glGetString(GL_RENDERER); // Returns a hint to the model
-    
+
         printf("%s\n", vendor);
         printf("%s\n", renderer);
         //So triagles do not overlap improperly.
-    
+
         glEnable(GL_DEPTH_TEST);
         /***************  END GL INITIALIZATION  *************/
-    
+
         //Setting up imgui
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
@@ -181,14 +206,14 @@ struct TOP
         ImGui::StyleColorsDark();
         ImGui_ImplGlfw_InitForOpenGL(window, true);
         ImGui_ImplOpenGL3_Init("#version 330 core");
-    
+
         return window;
     }
 
     void run_GA(Population *ref, int max_iter)
     {
         int ga_iter_n = 0;
-    
+
         while (ga_iter_n < max_iter)
         {
             std::cout << "GA iter: " << ga_iter_n << "\n";
@@ -197,7 +222,7 @@ struct TOP
             ga_iter_n++;
         }
     }
-    
+
     static void playsong(Population *ref)
     {
         ref->playAll();
@@ -205,7 +230,7 @@ struct TOP
 
     TOP()
     {
-    
+
     }
 
     Population *a_pop = NULL;
@@ -225,30 +250,31 @@ struct TOP
     	shader_t* display_shader = load_shader("shaders/vertex.glsl", "shaders/fragment.glsl", &err);
 
     	srand(time(NULL));
-    	Song mysong = Song::read_song("samples/twinkle_twinkle.top");
-    	mysong.initGL();
-
     	std::thread playthread;
 
 	size_t plot_data_aloc_size = 0;
 
-	if (a_pop != NULL) delete [] a_pop;
+	Song mysong;
 
-	a_pop = new Population(20, &mysong);
-	a_pop->_shader = display_shader;
-
-    	while(!glfwWindowShouldClose(window))
+	while(!glfwWindowShouldClose(window))
     	{
     	    processInput(window);
 
     	    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     	    glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
 
-    	    //if (init_population)
-    	    //{
-    	    //    a_pop = Population(20, mysong);
-    	    //    init_population = false;
-    	    //}
+    	    if (init_population)
+    	    {
+		if (a_pop != NULL) delete[] a_pop;
+
+		mysong = Song::read_song(ref_song_filename.c_str());
+    		mysong.initGL();
+
+		a_pop = new Population(20, &mysong);
+		a_pop->_shader = display_shader;
+
+    	        init_population = false;
+    	    }
 
     	    if (start_running_ga)
     	    {
@@ -276,15 +302,15 @@ struct TOP
     	    }
 
     	    if (play_stuff)
-    	        playthread = std::thread(TOP::playsong, a_pop);
     	    {
+    	        playthread = std::thread(TOP::playsong, a_pop);
     	        play_stuff = false;
     	    }
 
     	    use_shader(display_shader);
     	    set_uniform_float3(display_shader, 1.0, 1.0, 1.0, "color"); // Just to init
 
-    	    a_pop->draw_last_played();
+    	    if (selected_ref_song_file && a_pop) a_pop->draw_last_played();
 
     	    runUI();
     	    glfwSwapBuffers(window);
@@ -306,7 +332,6 @@ struct TOP
 int main(int argc, char* argv[])
 {
     TOP main_logic;
-
     main_logic.run();
 
     return 0;

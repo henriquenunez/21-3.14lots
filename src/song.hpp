@@ -25,6 +25,9 @@
 #define KEYS 88 // I like pianos
 
 int note_mut_span;
+int dur_mut_span;
+
+#define mod(a, b) (((a)%(b) < 0) ? (((a)%(b)) + (b)) : ((a)%(b)))
 
 // keep it simple
 // - Other metrics
@@ -39,7 +42,7 @@ struct Note
 {
     //double freq; // Pitch
     int note_n; // If 0 it's a pause.
-    int duration;
+    int duration; // Beats tuts tuts
 
     static inline double get_n_freq(int n)
     {
@@ -58,11 +61,6 @@ struct Note
     }
 };
 
-double freq_mut()
-{
-    return static_cast<double>(-200 + rand() % 401) * 0.2;
-}
-
 int note_mut()
 {
     return rand() % (note_mut_span/2+1) - note_mut_span/2;
@@ -70,7 +68,12 @@ int note_mut()
 
 int dur_mut()
 {
-    return (-400 + rand() % 801) * 0.2;
+    return rand() % (dur_mut_span/2+1) - dur_mut_span/2;
+}
+
+int mutate(int span)
+{
+    return rand() % (span/2+1) - span/2;
 }
 
 class Song
@@ -88,7 +91,7 @@ public:
 	cleanGraphics();
     }
 
-    static Song read_song(char* filename)
+    static Song read_song(const char* filename)
     {
 	Song gen;
 
@@ -113,7 +116,7 @@ public:
 	    sscanf(line, "%d %d", &temp_note, &temp_duration);
             printf("Retrieved line of length %zu:\n", read);
             printf("%s", line);
-	    gen.notes.push_back({temp_note, temp_duration * 250});
+	    gen.notes.push_back({ temp_note, temp_duration });
         }
 
         fclose(song_f);
@@ -145,8 +148,13 @@ public:
 
         for (int i = 0 ; i < a.notes.size() ; i++)
         {
-            notes.push_back({note_mut() + (a.notes[i].note_n + b.notes[i].note_n)/2,
-        			             dur_mut() + (a.notes[i].duration + b.notes[i].duration)/2});
+	    int new_tone = note_mut() + (a.notes[i].note_n + b.notes[i].note_n)/2;
+	    int new_duration = dur_mut() + (a.notes[i].duration + b.notes[i].duration)/2;
+
+	    new_tone = mod(new_tone, KEYS);
+	    new_duration = mod(new_tone, 16);
+
+            notes.push_back({ new_tone, new_duration });
         }
 
 	scores = b.scores;
@@ -155,35 +163,17 @@ public:
 	compute_song_metrics();
     }
 
-
     static Song randInit(int n)
     {
         Song gen;
 
         for (int i = 0 ; i < n ; i++)
         {
-            gen.notes.push_back({(rand() % KEYS), 100 + rand() % 800});
+            gen.notes.push_back({(rand() % KEYS), 1 + rand() % 16});
         }
 
         //gen.initGL();
 	gen.compute_song_metrics();
-        return gen;
-    }
-
-    // Following our logic, we keep the id from the second.
-    static Song genFromParents(Song &a, Song &b)
-    {
-        Song gen;
-
-	for (int i = 0 ; i < a.notes.size() ; i++)
-        {
-            gen.notes.push_back({note_mut() + (a.notes[i].note_n + b.notes[i].note_n)/2,
-        			             dur_mut() + (a.notes[i].duration + b.notes[i].duration)/2});
-        }
-
-	gen.scores = b.scores;
-	gen.id = b.id;
-
         return gen;
     }
 
@@ -201,7 +191,7 @@ public:
 	    {
 		std::cout << "Played note is: " << played_note << "\n";
 		if (a.is_pause()) SDL_Delay(a.duration);
-		else b.beep(a.get_freq(), a.duration); // Speeding up a bit
+		else b.beep(a.get_freq(), a.duration * 250); // Speeding up a bit
             	b.wait();
             	played_note++;
 	    }
@@ -270,8 +260,11 @@ public:
 	is_gl_ok = true;
     }
 
+    // Metrics to be used by the fitness function.
     float interval_values_mean;
     float interval_values_var;
+    float duration_values_mean;
+    float duration_values_var;
 
     bool is_gl_ok;
 private:
@@ -290,7 +283,7 @@ private:
 
         for (Note &a_note : notes)
         {
-            float time_offset = (float) a_note.duration / 15000.0f;
+            float time_offset = (float) a_note.duration / 60.0f;
 
             dy = -1.0 + a_note.note_n * step_note;
 
@@ -365,7 +358,7 @@ private:
     {
 	// Intervals are between two notes.
 	int interval_n = notes.size()-1;
-	int *intervals = new int[interval_n];
+	int *intervals = new int[interval_n]; // TODO: Refactor because we also use for duration.
 
 	for (int i = 1 ; i < notes.size() ; i++)
 	{
@@ -396,7 +389,7 @@ private:
 	for (int i = 0 ; i < interval_n ; i++)
 	{
 	    avg += (float)intervals[i];
-	    avg_square += (float)intervals[i] + (float)intervals[i];
+	    avg_square += (float)intervals[i] * (float)intervals[i];
 	}
 
 	avg /= (float)interval_n;
@@ -406,6 +399,32 @@ private:
 	interval_values_var = avg_square - (avg * avg); // Variance def.
 
 	delete[] intervals;
+
+	int *durations = new int[notes.size()];
+
+	// Computing the metric over beats.
+	for (int i = 0 ; i < notes.size() ; i++)
+	{
+	    durations[i] = notes[i].duration;
+	}
+
+	avg = 0.0;
+	avg_square = 0.0;
+
+	// First and second distribution moments.
+	for (int i = 0 ; i < notes.size(); i++)
+	{
+	    avg += (float)durations[i];
+	    avg_square += (float)durations[i] * (float)durations[i];
+	}
+
+	avg /= (float)notes.size();
+	avg_square /= (float)notes.size();
+
+	duration_values_mean = avg;
+	duration_values_var = avg_square - (avg * avg); // Variance def.
+
+	delete [] durations;
     }
 };
 
@@ -469,6 +488,46 @@ struct Population
     std::vector<float> generation_num;
     std::vector<float> generation_fitness;
 
+    void draw_last_played()
+    {
+	if (playing_ref)
+	{
+	    render_mutex.lock();
+	    _reference_song->render(_shader);
+	    render_mutex.unlock();
+	}
+	else if (last_played >= 0)
+	{
+	    // std::cout << "last_played: " << last_played << "\n";
+	    render_mutex.lock();
+	    if (!songs[last_played].is_gl_ok) songs[last_played].initGL();
+	    songs[last_played].render(_shader);
+	    render_mutex.unlock();
+	}
+    }
+
+    // Compare the intervals to our reference song.
+    float fitness(Song &a)
+    {
+	float dist_1_mean =
+	    (a.interval_values_mean - _reference_song->interval_values_mean);
+	float dist_1_var =
+	    (a.interval_values_var - _reference_song->interval_values_var);
+
+	float dist_2_mean =
+	    (a.duration_values_mean - _reference_song->duration_values_mean);
+	float dist_2_var =
+	    (a.duration_values_var - _reference_song->duration_values_var);
+
+	// Euclidean distance
+	double res = std::sqrt(	dist_1_mean * dist_1_mean +
+				dist_1_var * dist_1_var +
+				dist_2_mean * dist_2_mean +
+				dist_2_var * dist_2_var
+				);
+	return (float)1.0/res;
+    }
+
     void evaluate() // This is our most complicated function.
     {
         std::cout << "Evaluating\n";
@@ -481,8 +540,12 @@ struct Population
     	    if (score > best_score)
     	    {
 		best_score = score;
-        	best_idx = cnt;
-    	    }
+		best_idx = cnt;
+	    }
+	    else
+	    {
+		best_unchanged_time++;
+	    }
 
 	    cnt++;
     	}
@@ -493,35 +556,7 @@ struct Population
 	last_played = -1;
     }
 
-    void draw_last_played()
-    {
-	if (playing_ref)
-	{
-	    render_mutex.lock();
-	    _reference_song->render(_shader);
-	    render_mutex.unlock();
-	}
-        else if (last_played >= 0)
-        {
-	    // std::cout << "last_played: " << last_played << "\n";
-	    render_mutex.lock();
-            if (!songs[last_played].is_gl_ok) songs[last_played].initGL();
-	    songs[last_played].render(_shader);
-	    render_mutex.unlock();
-        }
-    }
-
-    // Compare the intervals to our reference song.
-    float fitness(Song &a)
-    {
-	float dist_1_mean =
-	    (a.interval_values_mean - _reference_song->interval_values_mean);
-	float dist_1_var =
-	    (a.interval_values_var - _reference_song->interval_values_var);
-
-	double res = std::sqrt(dist_1_mean * dist_1_mean + dist_1_var * dist_1_var);
-	return (float)1.0/res;
-    }
+    int best_unchanged_time = 0;
 
     void elitism()
     {
@@ -530,8 +565,19 @@ struct Population
         for (int i = 0 ; i < songs.size() ; i++)
         {
             if (i == best_idx) continue;
-	    render_mutex.lock();
-            songs[i] = Song(songs[best_idx], songs[i]);
+
+	    render_mutex.lock(); //Do we really need this mutex?
+
+	    // If the best is unchanged, increase mutation.
+	    if (best_unchanged_time < 8)
+	    {
+		songs[i] = Song(songs[best_idx], songs[i]);
+	    }
+	    else
+	    {
+		songs[i] = Song(songs[best_idx], songs[i]);
+	    }
+
 	    render_mutex.unlock();
         }
     }
