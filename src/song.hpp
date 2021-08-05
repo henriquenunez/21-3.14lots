@@ -3,6 +3,7 @@
 
 #include "beep.hpp"
 #include <SDL/SDL_timer.h>
+#include <cmath>
 #include <vector>
 
 #include <glad/glad.h>
@@ -22,6 +23,17 @@
 #include "shader.h"
 
 #define KEYS 88 // I like pianos
+
+int note_mut_span;
+
+// keep it simple
+// - Other metrics
+// - mudar a mutação
+// - Reduce key number
+// Plot fitness.
+// - diminuir  espaço de busca
+// Só depois que melhorar, aumenta o espaço de busca
+// - Colocar outra música geradora.
 
 struct Note
 {
@@ -53,7 +65,7 @@ double freq_mut()
 
 int note_mut()
 {
-    return -2 + rand() % 3;
+    return rand() % (note_mut_span/2+1) - note_mut_span/2;
 }
 
 int dur_mut()
@@ -76,7 +88,7 @@ public:
 	cleanGraphics();
     }
 
-    static Song read_song(const char* filename)
+    static Song read_song(char* filename)
     {
 	Song gen;
 
@@ -136,6 +148,10 @@ public:
             notes.push_back({note_mut() + (a.notes[i].note_n + b.notes[i].note_n)/2,
         			             dur_mut() + (a.notes[i].duration + b.notes[i].duration)/2});
         }
+
+	scores = b.scores;
+	id = b.id;
+
 	compute_song_metrics();
     }
 
@@ -154,23 +170,27 @@ public:
         return gen;
     }
 
+    // Following our logic, we keep the id from the second.
     static Song genFromParents(Song &a, Song &b)
     {
         Song gen;
 
-        for (int i = 0 ; i < a.notes.size() ; i++)
+	for (int i = 0 ; i < a.notes.size() ; i++)
         {
             gen.notes.push_back({note_mut() + (a.notes[i].note_n + b.notes[i].note_n)/2,
         			             dur_mut() + (a.notes[i].duration + b.notes[i].duration)/2});
         }
 
-        //gen.initGL();
+	gen.scores = b.scores;
+	gen.id = b.id;
 
         return gen;
     }
 
     std::vector<Note> notes;
-    int score;
+    std::vector<float> scores;
+
+    int id;
     int played_note = -1;
 
     void play()
@@ -270,7 +290,7 @@ private:
 
         for (Note &a_note : notes)
         {
-            const float time_offset = (float) a_note.duration / 15000.0f;
+            float time_offset = (float) a_note.duration / 15000.0f;
 
             dy = -1.0 + a_note.note_n * step_note;
 
@@ -344,12 +364,12 @@ private:
     void compute_song_metrics()
     {
 	// Intervals are between two notes.
-	const int interval_n = notes.size()-1;
+	int interval_n = notes.size()-1;
 	int *intervals = new int[interval_n];
 
 	for (int i = 1 ; i < notes.size() ; i++)
 	{
-	    const int interval = notes[i].note_n - notes[i-1].note_n;
+	    int interval = notes[i].note_n - notes[i-1].note_n;
 	    int val;
 
 	    if (interval == 0 ||
@@ -389,23 +409,21 @@ private:
     }
 };
 
-class Population
+struct Population
 {
-public:
-    Population(int n, Song &reference_song) : _reference_song(reference_song)
+    Population(int n, Song *reference_song)
     {
-        songs.clear();
-
-    	for (int i = 0 ; i < n ; i++)
-    	{
-    	    songs.push_back(Song::randInit(10));
-    	}
+	_reference_song = reference_song;
+	_note_n = n;
     }
+
+    Population()
+    {}
 
     void playAll()
     {
 	playing_ref = true;
-	_reference_song.play();
+	_reference_song->play();
 	playing_ref = false;
 
 	int cnt = 0;
@@ -420,6 +438,23 @@ public:
     	}
     }
 
+    void reset()
+    {
+        songs.clear();
+	generation_fitness.clear();
+	generation_num.clear();
+	last_gen = 0;
+
+    	for (int i = 0 ; i < _note_n ; i++)
+    	{
+	    Song a_song = Song::randInit(this->_reference_song->notes.size());
+	    a_song.id = i;
+
+    	    songs.push_back(a_song);
+    	}
+    }
+
+    int _note_n;
     std::vector<Song> songs;
     int iter_n;
     float best_score = 0.0;
@@ -427,8 +462,12 @@ public:
     int last_played = -1;
     shader_t *_shader;
     std::mutex render_mutex;
-    Song &_reference_song; // Like, literally.
+    Song *_reference_song; // Like, literally.
     bool playing_ref = false;
+
+    int last_gen = 0;
+    std::vector<float> generation_num;
+    std::vector<float> generation_fitness;
 
     void evaluate() // This is our most complicated function.
     {
@@ -436,13 +475,8 @@ public:
     	int cnt = 0;
     	for (auto &a : songs)
     	{
-	    //std::cout << "Playing song " << cnt << "\n";
-            //last_played = cnt;
-    	    //a.play();
-
-    	    const float score = fitness(a);
-    	    // printf("Grade for song nº %d\n", cnt);
-    	    // scanf("%d", &score);
+    	    float score = fitness(a);
+	    a.scores.push_back(score);
 
     	    if (score > best_score)
     	    {
@@ -450,10 +484,13 @@ public:
         	best_idx = cnt;
     	    }
 
-	    a.score = score;
 	    cnt++;
     	}
-        last_played = -1;
+
+	generation_num.push_back(last_gen++);
+	generation_fitness.push_back(best_score);
+
+	last_played = -1;
     }
 
     void draw_last_played()
@@ -461,7 +498,7 @@ public:
 	if (playing_ref)
 	{
 	    render_mutex.lock();
-	    _reference_song.render(_shader);
+	    _reference_song->render(_shader);
 	    render_mutex.unlock();
 	}
         else if (last_played >= 0)
@@ -477,10 +514,13 @@ public:
     // Compare the intervals to our reference song.
     float fitness(Song &a)
     {
-	float dist = fabs(a.interval_values_mean - _reference_song.interval_values_mean);
-	dist += fabs(a.interval_values_var - _reference_song.interval_values_var);
+	float dist_1_mean =
+	    (a.interval_values_mean - _reference_song->interval_values_mean);
+	float dist_1_var =
+	    (a.interval_values_var - _reference_song->interval_values_var);
 
-	return (float)1.0/dist;
+	double res = std::sqrt(dist_1_mean * dist_1_mean + dist_1_var * dist_1_var);
+	return (float)1.0/res;
     }
 
     void elitism()

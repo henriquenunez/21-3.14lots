@@ -25,14 +25,16 @@ GL_LIBS_DIR=${GL_DIR}/src
 BUILD_DIR=./build
 
 IMGUI_DIR = ../imgui
+IMPLOT_DIR = ../implot
 IMGUI_ADDONS_DIR = ../ImGui-Addons/FileBrowser
 
 CXXFLAGS += -I${GL_INCLUDE_DIR}
-CXXFLAGS += -I$(IMGUI_DIR) -I$(IMGUI_ADDONS_DIR) -I$(IMGUI_DIR)/backends -DIMGUI_IMPL_OPENGL_LOADER_GLAD
+CXXFLAGS += -I$(IMGUI_DIR) -I$(IMPLOT_DIR) -I$(IMGUI_ADDONS_DIR) -I$(IMGUI_DIR)/backends -DIMGUI_IMPL_OPENGL_LOADER_GLAD
 LDFLAGS += -lglfw3 -lGL -lX11 -lpthread -lXrandr -lXi -ldl -L${GL_LIBS_DIR}
 
 SOURCES = $(GL_DIR)/src/glad.c $(IMGUI_DIR)/imgui.cpp $(IMGUI_DIR)/imgui_demo.cpp $(IMGUI_DIR)/imgui_draw.cpp $(IMGUI_DIR)/imgui_tables.cpp $(IMGUI_DIR)/imgui_widgets.cpp
 SOURCES += $(IMGUI_DIR)/backends/imgui_impl_glfw.cpp $(IMGUI_DIR)/backends/imgui_impl_opengl3.cpp
+SOURCES += $(IMPLOT_DIR)/implot.cpp $(IMPLOT_DIR)/implot_items.cpp
 
 all: build_dir shader_lib imgui_addons
 	${CXX} main.cpp ${SOURCES} ${CXXFLAGS} ${BUILD_DIR}/*.o -o ${BUILD_DIR}/main ${LDFLAGS}
